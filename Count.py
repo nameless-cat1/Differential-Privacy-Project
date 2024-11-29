@@ -7,7 +7,7 @@ EPSILON = 1
 D = pow(10, 6)
 TAU = math.ceil(2 / EPSILON * math.log((D + 1) / BETA))
 
-def get_query_result():
+def fetch_data_from_db():
     # Q18
     #
     # query = (
@@ -57,79 +57,84 @@ def get_query_result():
     #     "where s_suppkey = l_suppkey and ps_suppkey = l_suppkey and ps_partkey = l_partkey"
     # )
 
-    mydb = mysql.connector.connect(
+    connection = mysql.connector.connect(
         host='localhost',
         user='root',
         password='123456',
         database='tpcd',
         auth_plugin='caching_sha2_password'
     )
-    cursor = mydb.cursor()
+    cursor = connection.cursor()
     cursor.execute(query)
-    result = np.array(cursor.fetchall())
+    results = np.array(cursor.fetchall())
     cursor.close()
-    mydb.close()
+    connection.close()
 
 
-    sorted_result = result[(-result[:, 1]).argsort()]
-    u, t = np.hsplit(sorted_result, 2)
-    return u.flatten(), t.flatten().astype(float)
+    sorted_results = results[results[:, 1].argsort()[::-1]]
+    keys, counts = np.hsplit(sorted_results, 2)
+    return keys.flatten(), counts.flatten().astype(float)
 
-def shift_inverse(f):
-    s = np.full(D, -TAU - 1, dtype=int)
-    for r in range(D):
-        if f[TAU] == r:
-            s[r] = 0
+
+def compute_shift_inverse(f):
+    shifts = np.full(D, -TAU - 1, dtype=int)
+    for i in range(D):
+        if f[TAU] == i:
+            shifts[i] = 0
         else:
-            j = binary_search(f, r)
-            if 1 <= j <= TAU:
-                s[r] = -TAU + j - 1
-            elif TAU < j <= 2 * TAU:
-                s[r] = TAU - j
-    p = np.exp(EPSILON / 2 * s)
-    p /= p.sum()
-    r_tilde = np.random.choice(D, p=p)
-    return r_tilde
+            pos = binary_search(f, i)
+            if 1 <= pos <= TAU:
+                shifts[i] = -TAU + pos - 1
+            elif TAU < pos <= 2 * TAU:
+                shifts[i] = TAU - pos
+    probabilities = np.exp(EPSILON / 2 * shifts)
+    probabilities /= probabilities.sum()
+    estimated_index = np.random.choice(D, p=probabilities)
+    return estimated_index
 
-def binary_search(f, r):
+
+def binary_search(f, target):
     low, high = 1, 2 * TAU
     while low <= high:
         mid = (low + high) // 2
-        if f[mid] < r <= f[mid - 1]:
+        if f[mid] < target <= f[mid - 1]:
             return mid
-        elif r <= f[mid]:
+        elif target <= f[mid]:
             low = mid + 1
         else:
             high = mid - 1
     return -1
 
-def count(t):
-    aggregation_values = np.sort(t)
-    _sum = np.sum(aggregation_values)
-    f = [0] * (2 * TAU + 1)
-    f[0] = _sum
-    for j in range(1, 2 * TAU + 1):
-        f[j] = _sum - np.sum(aggregation_values[-j:])
-    return f
 
-def get_evaluation_error(t, r_tilde):
-    r = np.sum(t)
-    relative_error = abs(r_tilde - r) / r
+def aggregate_values(counts):
+    sorted_counts = np.sort(counts)
+    total_sum = np.sum(sorted_counts)
+    aggregated_f = [total_sum]
+    for j in range(1, 2 * TAU + 1):
+        aggregated_f.append(total_sum - np.sum(sorted_counts[-j:]))
+    return aggregated_f
+
+
+def calculate_relative_error(actual, estimated):
+    actual_total = np.sum(actual)
+    relative_error = abs(estimated - actual_total) / actual_total
     print("The relative error: ", relative_error)
     return relative_error
 
 
-user, tuple_counts = get_query_result()
-print(user)
-print(tuple_counts)
 
-repeat_time = 5
-relative_errors = []
-f_k = count(tuple_counts)
-print(np.sum(tuple_counts))
+user_keys, item_counts = fetch_data_from_db()
+print(user_keys)
+print(item_counts)
 
-for i in range(repeat_time):
-    r_tilde = shift_inverse(f_k)
-    relative_errors.append(get_evaluation_error(tuple_counts, r_tilde))
 
-print("The average relative error: ", np.average(relative_errors))
+repetitions = 5
+errors = []
+f_k = aggregate_values(item_counts)
+print(np.sum(item_counts))
+
+for _ in range(repetitions):
+    estimated_value = compute_shift_inverse(f_k)
+    errors.append(calculate_relative_error(item_counts, estimated_value))
+
+print("The average relative error: ", np.average(errors))

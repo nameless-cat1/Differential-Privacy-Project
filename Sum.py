@@ -8,88 +8,100 @@ EPSILON = 1
 D = pow(10, 7) * 2
 TAU = math.ceil(2 / EPSILON * math.log((D + 1) / BETA))
 
-def get_query_result():
-
+def fetch_query_results():
+    # Q18
+    # query = (
+    #     "select c_custkey, l_quantity "
+    #     "from customer, orders, lineitem "
+    #     "where c_custkey = o_custkey "
+    #     "and l_orderkey = o_orderkey "
+    #     "order by l_quantity"
+    # )
+    # Q9
     query = (
-        "SELECT s_suppkey, (l_extendedprice * (1 - l_discount) - ps_supplycost * l_quantity)/1000 AS num "
-        "FROM supplier, partsupp, lineitem "
-        "WHERE s_suppkey = l_suppkey AND ps_suppkey = l_suppkey AND ps_partkey = l_partkey "
-        "ORDER BY num"
+        "select s_suppkey, (l_extendedprice * (1 - l_discount) - ps_supplycost * l_quantity)/1000 as num "
+        "from supplier, partsupp, lineitem "
+        "where s_suppkey = l_suppkey and ps_suppkey = l_suppkey and ps_partkey = l_partkey "
+        "order by num"
     )
 
-
-    mydb = mysql.connector.connect(
+    db_connection = mysql.connector.connect(
         host='localhost',
         user='root',
         password='123456',
         database='tpcd',
         auth_plugin='caching_sha2_password'
     )
-    cursor = mydb.cursor()
+    cursor = db_connection.cursor()
     cursor.execute(query)
-    result = np.array(cursor.fetchall())
+    results = np.array(cursor.fetchall())
     cursor.close()
-    mydb.close()
+    db_connection.close()
 
-    sorted_result = result[(-result[:, 1]).argsort()]
-    u, t = np.hsplit(sorted_result, 2)
-    return u.flatten(), t.flatten().astype(float)
 
-def shift_inverse(f):
-    s = np.full(D, -TAU - 1, dtype=int)
+    sorted_results = results[(-results[:, 1]).argsort()]
+    keys, values = np.hsplit(sorted_results, 2)
+    return keys.flatten(), values.flatten().astype(float)
+
+
+def compute_shift_inverse(f):
+    shifts = np.full(D, -TAU - 1, dtype=int)
     for r in range(D):
         if f[TAU] == r:
-            s[r] = 0
+            shifts[r] = 0
         else:
-            j = binary_search(f, r)
+            j = binary_search_algorithm(f, r)
             if 1 <= j <= TAU:
-                s[r] = -TAU + j - 1
+                shifts[r] = -TAU + j - 1
             elif TAU < j <= 2 * TAU:
-                s[r] = TAU - j
-    p = np.exp(EPSILON / 2 * s)
-    p /= p.sum()
-    r_tilde = np.random.choice(D, p=p)
-    return r_tilde
+                shifts[r] = TAU - j
+    probabilities = np.exp(EPSILON / 2 * shifts)
+    probabilities /= probabilities.sum()
+    estimated_index = np.random.choice(D, p=probabilities)
+    return estimated_index
 
-def binary_search(f, r):
+
+def binary_search_algorithm(f, target):
     low, high = 1, 2 * TAU
     while low <= high:
         mid = (low + high) // 2
-        if f[mid] < r <= f[mid - 1]:
+        if f[mid] < target <= f[mid - 1]:
             return mid
-        elif r <= f[mid]:
+        elif target <= f[mid]:
             low = mid + 1
         else:
             high = mid - 1
     return -1
 
-def count(t):
-    aggregation_values = np.sort(t)
-    _sum = np.sum(aggregation_values)
-    f = [0] * (2 * TAU + 1)
-    f[0] = _sum
+
+def aggregate_counts(counts):
+    sorted_counts = np.sort(counts)
+    total_sum = np.sum(sorted_counts)
+    f = [total_sum]
     for j in range(1, 2 * TAU + 1):
-        f[j] = _sum - np.sum(aggregation_values[-j:])
+        f.append(total_sum - np.sum(sorted_counts[-j:]))
     return f
 
-def get_evaluation_error(t, r_tilde):
-    r = np.sum(t)
-    relative_error = abs(r_tilde - r) / r
+
+def calculate_relative_error(actual, estimated):
+    actual_sum = np.sum(actual)
+    relative_error = abs(estimated - actual_sum) / actual_sum
     print("The relative error: ", relative_error)
     return relative_error
 
 
-user, tuple_counts = get_query_result()
-print(user)
-print(tuple_counts)
+user_keys, item_values = fetch_query_results()
+print(user_keys)
+print(item_values)
 
-repeat_time = 5
-relative_errors = []
-f_k = count(tuple_counts)
-print(np.sum(tuple_counts))
 
-for i in range(repeat_time):
-    r_tilde = shift_inverse(f_k)
-    relative_errors.append(get_evaluation_error(tuple_counts, r_tilde))
+repetitions = 5
+errors = []
+f_k = aggregate_counts(item_values)
+print(np.sum(item_values))
 
-print("The average relative error: ", np.average(relative_errors))
+for _ in range(repetitions):
+    estimated_value = compute_shift_inverse(f_k)
+    errors.append(calculate_relative_error(item_values, estimated_value))
+
+print("The average relative error: ", np.average(errors))
