@@ -18,11 +18,21 @@ def fetch_query_results():
     #     "order by l_quantity"
     # )
     # Q9
+    # query = (
+    #     "select s_suppkey, (l_extendedprice * (1 - l_discount) - ps_supplycost * l_quantity)/1000 as num "
+    #     "from supplier, partsupp, lineitem "
+    #     "where s_suppkey = l_suppkey and ps_suppkey = l_suppkey and ps_partkey = l_partkey "
+    #     "order by num"
+    # )
+
+    #Q7
     query = (
-        "select s_suppkey, (l_extendedprice * (1 - l_discount) - ps_supplycost * l_quantity)/1000 as num "
-        "from supplier, partsupp, lineitem "
-        "where s_suppkey = l_suppkey and ps_suppkey = l_suppkey and ps_partkey = l_partkey "
-        "order by num"
+        "select 1,sum(l_extendedprice * (1 - l_discount)/1000) value "
+        "from nation as n1, nation as n2, customer, supplier, orders, lineitem "
+        "where n1.n_nationkey=c_nationkey and n2.n_nationkey=s_nationkey and c_custkey=o_custkey "
+        "and s_suppkey=l_suppkey and o_orderkey=l_orderkey and l_shipdate>=date'1995-01-01' and l_shipdate<=date'1996-12-31' "
+        "group by c_custkey, s_suppkey "
+        "order by value"
     )
 
     db_connection = mysql.connector.connect(
@@ -40,8 +50,8 @@ def fetch_query_results():
 
 
     sorted_results = results[(-results[:, 1]).argsort()]
-    keys, values = np.hsplit(sorted_results, 2)
-    return keys.flatten(), values.flatten().astype(float)
+    _, values = np.hsplit(sorted_results, 2)
+    return values.flatten().astype(float)
 
 
 def compute_shift_inverse(f):
@@ -90,8 +100,7 @@ def calculate_relative_error(actual, estimated):
     return relative_error
 
 
-user_keys, item_values = fetch_query_results()
-print(user_keys)
+item_values = fetch_query_results()
 print(item_values)
 
 

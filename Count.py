@@ -20,13 +20,13 @@ def fetch_data_from_db():
     # )
 
     # Q12
-    query = (
-        "select o_orderkey, count(*) as count "
-        "from orders, lineitem "
-        "where o_orderkey = l_orderkey "
-        "group by o_orderkey "
-        "order by count"
-    )
+    # query = (
+    #     "select o_orderkey, count(*) as count "
+    #     "from orders, lineitem "
+    #     "where o_orderkey = l_orderkey "
+    #     "group by o_orderkey "
+    #     "order by count"
+    # )
 
     # Q9
     # query = (
@@ -38,24 +38,15 @@ def fetch_data_from_db():
     # )
 
     # Q5
-    # query = (
-    #     "select n_nationkey, count(*) as count "
-    #     "from customer,orders,lineitem,supplier,nation,region "
-    #     "where c_custkey = o_custkey and l_orderkey = o_orderkey "
-    #     "and l_suppkey = s_suppkey "
-    #     "and c_nationkey = s_nationkey "
-    #     "and s_nationkey = n_nationkey "
-    #     "and n_regionkey = r_regionkey "
-    #     "group by n_nationkey "
-    #     "order by count"
-    # )
+    query = (
+        "select 1,count(*) as count "
+        "from region, nation, customer, supplier, orders, lineitem "
+        "where r_regionkey=n_regionkey and n_nationkey=c_nationkey "
+        "and n_nationkey=s_nationkey and c_custkey=o_custkey and s_suppkey=l_suppkey and o_orderkey=l_orderkey "
+        "group by c_custkey, s_suppkey "
+        "order by count"
+    )
 
-    # Q9
-    # query = (
-    #     "select 1, s_suppkey "
-    #     "from supplier, partsupp, lineitem "
-    #     "where s_suppkey = l_suppkey and ps_suppkey = l_suppkey and ps_partkey = l_partkey"
-    # )
 
     connection = mysql.connector.connect(
         host='localhost',
@@ -72,8 +63,8 @@ def fetch_data_from_db():
 
 
     sorted_results = results[results[:, 1].argsort()[::-1]]
-    keys, counts = np.hsplit(sorted_results, 2)
-    return keys.flatten(), counts.flatten().astype(float)
+    _, counts = np.hsplit(sorted_results, 2)
+    return counts.flatten().astype(float)
 
 
 def compute_shift_inverse(f):
@@ -123,8 +114,7 @@ def calculate_relative_error(actual, estimated):
 
 
 
-user_keys, item_counts = fetch_data_from_db()
-print(user_keys)
+item_counts = fetch_data_from_db()
 print(item_counts)
 
 
@@ -135,6 +125,7 @@ print(np.sum(item_counts))
 
 for _ in range(repetitions):
     estimated_value = compute_shift_inverse(f_k)
+    print(estimated_value)
     errors.append(calculate_relative_error(item_counts, estimated_value))
 
 print("The average relative error: ", np.average(errors))

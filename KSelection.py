@@ -41,8 +41,8 @@ def fetch_query_results():
 
 
     sorted_results = results[(-results[:, 1]).argsort()]
-    keys, values = np.hsplit(sorted_results, 2)
-    return keys.flatten(), values.flatten().astype(float)
+    _, values = np.hsplit(sorted_results, 2)
+    return values.flatten().astype(float)
 
 
 def compute_shift_inverse(f):
